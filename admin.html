@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chefly — Shift Manager (Admin)</title>
+<style>
+  :root{
+    --bg:#f8fafc; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --brand:#e8590c; --brand-d:#c2410c;
+    --green:#15803d; --green-bg:#dcfce7; --amber:#b45309; --amber-bg:#fef3c7;
+    --red:#b91c1c; --red-bg:#fee2e2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+  .wrap{max-width:880px;margin:0 auto;padding:20px 16px 80px}
+  h1{font-size:22px;margin:6px 0 2px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px;font-weight:600}
+  input{padding:11px 12px;font-size:15px;border:1.5px solid var(--line);border-radius:10px;background:#fff;width:100%}
+  input:focus{outline:none;border-color:var(--brand)}
+  button{font-size:14px;font-weight:600;border:0;border-radius:10px;padding:11px 16px;cursor:pointer;background:var(--brand);color:#fff}
+  button:active{background:var(--brand-d)}
+  button.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+  button.sm{padding:6px 10px;font-size:13px}
+  button.danger{background:#fff;color:var(--red);border:1.5px solid #f3c4c4}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row > div{flex:1;min-width:90px}
+  .shift-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .shift-h .label{font-size:18px;font-weight:800}
+  .shift-h .time{color:var(--muted);font-size:13px}
+  .counts{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+  .pill{font-size:12.5px;font-weight:700;padding:5px 10px;border-radius:999px;background:#eef2f7;color:#334155}
+  .pill.c{background:var(--green-bg);color:var(--green)}
+  .pill.w{background:var(--amber-bg);color:var(--amber)}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line)}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .tag.c{background:var(--green-bg);color:var(--green)}
+  .tag.w{background:var(--amber-bg);color:var(--amber)}
+  .cap-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .cap-edit > div{width:110px}
+  .empty{color:var(--muted);font-size:14px;padding:8px 0}
+  .hint{color:var(--muted);font-size:12px;align-self:center}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .hide{display:none}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:10}
+  .toast.show{opacity:1}
+  .gate{max-width:360px;margin:60px auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="gate" class="gate">
+    <h1>Shift Manager</h1>
+    <div class="sub">Chefly — staff bookings</div>
+    <div class="card">
+      <label for="key">Passcode</label>
+      <input id="key" type="password" placeholder="Enter admin passcode" />
+      <div style="margin-top:12px"><button id="loginBtn" style="width:100%">Open dashboard</button></div>
+      <div id="gateErr" style="color:var(--red);font-size:13px;margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div id="dash" class="hide">
+    <h1>Shift Manager</h1>
+    <div class="sub">Live log of who's booked. Set capacities, add shifts, manage the waiting list.</div>
+    <div class="bar">
+      <button id="refreshBtn" class="ghost sm">↻ Refresh</button>
+      <button id="csvBtn" class="ghost sm">⬇ Export log (CSV)</button>
+      <button id="addToggle" class="ghost sm">＋ Add shift</button>
+      <button id="keyBtn" class="ghost sm">🔑 Change passcode</button>
+    </div>
+
+    <div id="addForm" class="card hide">
+      <div class="shift-h"><div class="label" style="font-size:16px">New shift</div></div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:2"><label>Label</label><input id="aLabel" placeholder="e.g. Fri 3 Jul — AM" /></div>
+        <div><label>Date</label><input id="aDate" type="date" /></div>
+        <div><label>AM/PM</label><input id="aPeriod" placeholder="AM" /></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>Start</label><input id="aStart" placeholder="07:00" /></div>
+        <div><label>End</label><input id="aEnd" placeholder="19:00" /></div>
+        <div><label>Capacity</label><input id="aCap" type="number" value="13" /></div>
+        <div><label>Waitlist</label><input id="aWait" type="number" value="5" /></div>
+        <div style="flex:0 0 auto"><button id="addBtn">Add</button></div>
+      </div>
+    </div>
+
+    <div id="shifts"></div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const SUPABASE_URL = 'https://fhztszxpgqhunogwcoxw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3g-avL7NqQQsIMESfiGk4Q_8dBIarve';
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let KEY = sessionStorage.getItem('fb_key') || '';
+let LAST = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+async function login(){
+  const k = $('key').value.trim();
+  const { data, error } = await sb.rpc('fb_admin_check',{ p_key:k });
+  if(error){ $('gateErr').textContent='Connection error, try again.'; return; }
+  if(data===true){ KEY=k; sessionStorage.setItem('fb_key',k); $('gate').classList.add('hide'); $('dash').classList.remove('hide'); loadLog(); }
+  else { $('gateErr').textContent='Wrong passcode.'; }
+}
+
+async function loadLog(){
+  const { data, error } = await sb.rpc('fb_admin_log',{ p_key:KEY });
+  if(error || !data || data.ok===false){ toast('Could not load.'); return; }
+  LAST = data.shifts || [];
+  renderShifts(LAST);
+}
+
+function renderShifts(shifts){
+  if(!shifts.length){ $('shifts').innerHTML='<div class="card empty">No shifts yet. Use “Add shift”.</div>'; return; }
+  $('shifts').innerHTML = shifts.map(s=>{
+    const conf = s.bookings.filter(b=>b.status==='confirmed');
+    const wait = s.bookings.filter(b=>b.status==='waitlist');
+    const rows = b => `<tr>
+        <td>${b.position}</td><td>${esc(b.name)}</td><td>${esc(b.phone)}</td>
+        <td><span class="tag ${b.status==='confirmed'?'c':'w'}">${b.status}</span></td>
+        <td style="text-align:right"><button class="danger sm" data-del="${b.id}">Remove</button></td>
+      </tr>`;
+    const tableFor = (arr,title) => arr.length
+      ? `<table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>${title}</th><th></th></tr></thead><tbody>${arr.map(rows).join('')}</tbody></table>`
+      : `<div class="empty">No ${title.toLowerCase()} yet.</div>`;
+    return `<div class="card" data-id="${s.id}">
+      <div class="shift-h">
+        <div><div class="label">${esc(s.label)}</div><div class="time">${esc(s.start_time)} – ${esc(s.end_time)}</div></div>
+        <button class="danger sm" data-delshift="${s.id}">Delete shift</button>
+      </div>
+      <div class="counts">
+        <span class="pill c">Confirmed ${s.confirmed_count} / ${s.capacity}</span>
+        <span class="pill w">Waitlist ${s.waitlist_count} / ${s.waitlist_cap}</span>
+      </div>
+      ${tableFor(conf,'Confirmed')}
+      ${wait.length?'<div style="height:6px"></div>'+tableFor(wait,'Waitlist'):''}
+      <div class="cap-edit">
+        <div><label>Capacity</label><input type="number" min="0" value="${s.capacity}" data-cap="${s.id}" /></div>
+        <div><label>Waitlist</label><input type="number" min="0" value="${s.waitlist_cap}" data-wait="${s.id}" /></div>
+        <button class="ghost sm" data-savecap="${s.id}">Save</button>
+        <span class="hint">Changes save when you tap out of the box</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delBooking(b.dataset.del));
+  document.querySelectorAll('[data-delshift]').forEach(b=>b.onclick=()=>delShift(b.dataset.delshift));
+  document.querySelectorAll('[data-savecap]').forEach(b=>b.onclick=()=>saveCap(b.dataset.savecap));
+  document.querySelectorAll('[data-cap],[data-wait]').forEach(function(i){ i.onchange=function(){ saveCap(i.dataset.cap||i.dataset.wait); }; i.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); i.blur(); } }; });
+}
+
+async function saveCap(id){
+  const cap = parseInt(document.querySelector(`[data-cap="${id}"]`).value,10);
+  const wait = parseInt(document.querySelector(`[data-wait="${id}"]`).value,10);
+  const { data } = await sb.rpc('fb_admin_set_capacity',{ p_key:KEY, p_shift_id:id, p_capacity:cap, p_waitlist:wait });
+  if(data && data.ok){ toast('Limits updated — waitlist auto-promoted if spots opened.'); loadLog(); } else toast('Could not save.');
+}
+async function delBooking(id){
+  if(!confirm('Remove this person from the shift? The next person on the waiting list will be promoted automatically.')) return;
+  const { data } = await sb.rpc('fb_admin_delete_booking',{ p_key:KEY, p_booking_id:id });
+  if(data && data.ok){ toast('Removed.'); loadLog(); } else toast('Could not remove.');
+}
+async function delShift(id){
+  if(!confirm('Delete this whole shift and all its bookings? This cannot be undone.')) return;
+  const { data } = await sb.rpc('fb_admin_delete_shift',{ p_key:KEY, p_shift_id:id });
+  if(data && data.ok){ toast('Shift deleted.'); loadLog(); } else toast('Could not delete.');
+}
+async function addShift(){
+  const p = {
+    p_key:KEY, p_label:$('aLabel').value.trim(), p_date:$('aDate').value,
+    p_period:$('aPeriod').value.trim()||'AM', p_start:$('aStart').value.trim()||'07:00',
+    p_end:$('aEnd').value.trim()||'19:00',
+    p_capacity:parseInt($('aCap').value,10)||0, p_waitlist:parseInt($('aWait').value,10)||0
+  };
+  if(!p.p_label || !p.p_date){ toast('Label and date are required.'); return; }
+  const { data } = await sb.rpc('fb_admin_add_shift', p);
+  if(data && data.ok){ toast('Shift added.'); $('addForm').classList.add('hide'); ['aLabel','aDate'].forEach(i=>$(i).value=''); loadLog(); } else toast('Could not add.');
+}
+async function changeKey(){
+  const nk = prompt('Enter a new passcode for the admin page:');
+  if(nk===null) return;
+  const { data } = await sb.rpc('fb_admin_set_key',{ p_key:KEY, p_new_key:nk });
+  if(data && data.ok){ KEY=nk.trim(); sessionStorage.setItem('fb_key',KEY); toast('Passcode changed.'); }
+  else toast((data&&data.message)||'Could not change passcode.');
+}
+function exportCsv(){
+  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Booked at']];
+  LAST.forEach(s=>s.bookings.slice().sort((a,b)=>(b.status>a.status?1:-1)||a.position-b.position).forEach(b=>{
+    lines.push([s.label,s.shift_date,s.start_time+'-'+s.end_time,b.status,b.position,b.name,b.phone,new Date(b.created_at).toLocaleString()]);
+  }));
+  const csv=lines.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='chefly-shift-log.csv'; a.click();
+}
+
+$('loginBtn').onclick=login;
+$('key').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+$('refreshBtn').onclick=loadLog;
+$('csvBtn').onclick=exportCsv;
+$('addToggle').onclick=()=>$('addForm').classList.toggle('hide');
+$('addBtn').onclick=addShift;
+$('keyBtn').onclick=changeKey;
+
+if(KEY){ sb.rpc('fb_admin_check',{p_key:KEY}).then(({data})=>{ if(data===true){ $('gate').classList.add('hide'); $('dash').classList.remove('hide'); loadLog(); } }); }
+</script>
+</body>
+</html>

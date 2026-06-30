@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chefly — Shift Sign-Up</title>
+<style>
+  :root{
+    --bg:#fff7ed; --card:#ffffff; --ink:#27160b; --muted:#8a6f5c;
+    --brand:#e8590c; --brand-d:#c2410c; --line:#f0d9c4;
+    --green:#15803d; --green-bg:#dcfce7; --amber:#b45309; --amber-bg:#fef3c7;
+    --red:#b91c1c; --red-bg:#fee2e2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 16px 60px}
+  header{text-align:center;padding:14px 0 6px}
+  .logo{font-size:30px;font-weight:800;letter-spacing:-.5px;color:var(--brand-d)}
+  .logo span{color:var(--ink)}
+  .sub{color:var(--muted);font-size:15px;margin-top:4px}
+  .addr{color:var(--ink);font-size:13.5px;margin-top:10px;background:#fff;border:1px solid var(--line);
+    display:inline-block;padding:7px 12px;border-radius:999px}
+  .you{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:16px 0;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .you h2{margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:600}
+  input{width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--line);border-radius:12px;
+    background:#fffdfb;color:var(--ink);outline:none}
+  input:focus{border-color:var(--brand)}
+  .grid{display:flex;gap:10px}
+  .grid > div{flex:1}
+  h2.section{font-size:15px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:22px 4px 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .card .label{font-size:18px;font-weight:800}
+  .card .time{color:var(--muted);font-size:14px;margin-top:2px}
+  .badge{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;white-space:nowrap}
+  .b-open{background:var(--green-bg);color:var(--green)}
+  .b-wait{background:var(--amber-bg);color:var(--amber)}
+  .b-full{background:var(--red-bg);color:var(--red)}
+  button.book{width:100%;padding:14px;font-size:16px;font-weight:700;border:0;border-radius:12px;
+    background:var(--brand);color:#fff;cursor:pointer;margin-top:14px}
+  button.book:active{background:var(--brand-d)}
+  button.book:disabled{background:#e7d3c2;color:#9c8472;cursor:not-allowed}
+  button.book.wait{background:var(--amber)}
+  .result{margin-top:12px;padding:12px 14px;border-radius:12px;font-size:14.5px;display:none}
+  .result.show{display:block}
+  .r-ok{background:var(--green-bg);color:#14532d}
+  .r-wait{background:var(--amber-bg);color:#7c2d12}
+  .r-err{background:var(--red-bg);color:#7f1d1d}
+  .foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:24px}
+  .loading{text-align:center;color:var(--muted);padding:30px}
+  .err-top{background:var(--red-bg);color:#7f1d1d;padding:12px;border-radius:12px;margin:12px 0;font-size:14px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Chefly</div>
+    <div class="sub">Pick the shift(s) you can cover. First come, first served.</div>
+    <div class="addr">📍 Unit 17, 250 Milkwood Rd, London, SE24 0HG</div>
+  </header>
+
+  <div id="topErr" class="err-top"></div>
+
+  <div class="you">
+    <h2>Your details</h2>
+    <label for="name">Full name</label>
+    <input id="name" type="text" autocomplete="name" placeholder="e.g. Sam Taylor" />
+    <label for="phone">Mobile number</label>
+    <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 07700 900000" />
+  </div>
+
+  <h2 class="section">Available shifts</h2>
+  <div id="shifts"><div class="loading">Loading shifts…</div></div>
+
+  <div class="foot">Your details are only used to log who is working each shift.</div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL = 'https://fhztszxpgqhunogwcoxw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3g-avL7NqQQsIMESfiGk4Q_8dBIarve';
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const shiftsEl = document.getElementById('shifts');
+const nameEl = document.getElementById('name');
+const phoneEl = document.getElementById('phone');
+const topErr = document.getElementById('topErr');
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+async function load(){
+  topErr.style.display='none';
+  const { data, error } = await sb.rpc('fb_get_shifts');
+  if(error){ topErr.textContent='Could not load shifts. Please refresh.'; topErr.style.display='block'; return; }
+  render(data || []);
+}
+
+function render(shifts){
+  if(!shifts.length){ shiftsEl.innerHTML='<div class="loading">No shifts open right now.</div>'; return; }
+  shiftsEl.innerHTML = shifts.map(s=>{
+    let badge, btn, btnClass='';
+    if(s.state==='open'){ badge='<span class="badge b-open">'+s.spots_left+' spot'+(s.spots_left===1?'':'s')+' left</span>'; btn='Book this shift'; }
+    else if(s.state==='waitlist'){ badge='<span class="badge b-wait">Full — '+s.waitlist_left+' waitlist left</span>'; btn='Join waiting list'; btnClass='wait'; }
+    else { badge='<span class="badge b-full">Fully booked</span>'; btn='Closed'; }
+    const disabled = s.state==='full' ? 'disabled' : '';
+    return `<div class="card" data-id="${s.id}">
+      <div class="top">
+        <div><div class="label">${esc(s.label)}</div><div class="time">${esc(s.start_time)} – ${esc(s.end_time)}</div></div>
+        ${badge}
+      </div>
+      <button class="book ${btnClass}" ${disabled}>${btn}</button>
+      <div class="result"></div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.card .book').forEach(b=>b.addEventListener('click',onBook));
+}
+
+async function onBook(e){
+  const card = e.target.closest('.card');
+  const id = card.dataset.id;
+  const res = card.querySelector('.result');
+  const name = nameEl.value.trim();
+  const phone = phoneEl.value.trim();
+
+  if(!name || phone.replace(/\D/g,'').length < 7){
+    res.className='result show r-err';
+    res.textContent='Please enter your name and a valid mobile number above first.';
+    (!name?nameEl:phoneEl).focus();
+    return;
+  }
+  e.target.disabled=true; e.target.textContent='Booking…';
+
+  const { data, error } = await sb.rpc('fb_book',{ p_shift_id:id, p_name:name, p_phone:phone });
+  if(error){ res.className='result show r-err'; res.textContent='Something went wrong — please try again.'; e.target.disabled=false; load(); return; }
+
+  if(data.state==='confirmed'){
+    res.className='result show r-ok';
+    res.innerHTML = (data.already?'You were already booked on ':'✅ You\'re confirmed for ')+'<b>'+esc(data.label)+'</b>. See you there!';
+  } else if(data.state==='waitlist'){
+    res.className='result show r-wait';
+    res.innerHTML = (data.already?'You\'re on the waiting list for ':'📋 Added to the <b>waiting list</b> for ')+'<b>'+esc(data.label)+'</b> (no. '+data.position+'). We\'ll text you if a spot opens.';
+  } else {
+    res.className='result show r-err';
+    res.textContent = data.message || 'Sorry, this shift is full.';
+  }
+  await load();
+}
+
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>
