@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <title>Chefly — Shift Manager (Admin)</title>
 <style>
   :root{
@@ -241,6 +242,7 @@ function renderShifts(shifts){
         ${ns.length?`<span class="pill n">No-shows ${ns.length}</span>`:''}
       </div>
       ${confTable}
+      ${conf.length?`<div style="margin-top:8px"><button class="ghost sm" data-remindshift="${s.id}">📣 Text confirmed to confirm shift</button></div>`:''}
       ${waitTable}
       ${nsTable}
       <div class="addp">
@@ -270,6 +272,18 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-noshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.noshow, true));
   document.querySelectorAll('[data-unshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.unshow, false));
   document.querySelectorAll('[data-notify]').forEach(b=>b.onclick=()=>notifyWaitlist(b.dataset.notify));
+  document.querySelectorAll('[data-remindshift]').forEach(b=>b.onclick=()=>remindConfirmedShift(b.dataset.remindshift));
+}
+
+function remindConfirmedShift(shiftId){
+  const s = LAST.find(x=>x.id===shiftId); if(!s) return;
+  const recips = s.bookings.filter(b=>b.status==='confirmed').map(b=>`${b.name}, ${b.phone}`);
+  if(!recips.length){ toast('No confirmed people on this shift.'); return; }
+  openRemind('Confirm shift — '+s.label,
+    'Texts this shift’s confirmed staff, asking them to tap the link and confirm they are coming.',
+    recips,
+    `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your ${s.label} shift (${s.start_time}–${s.end_time}): ${CONFIRM_URL} — tap the link and let us know. Thanks!`,
+    'reminder');
 }
 
 function openRemind(title, help, recips, message, kind){
