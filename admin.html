@@ -14,7 +14,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
-  .wrap{max-width:880px;margin:0 auto;padding:20px 16px 80px}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 80px}
   h1{font-size:22px;margin:6px 0 2px}
   .sub{color:var(--muted);font-size:14px;margin-bottom:18px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;
@@ -23,7 +23,7 @@
   input{padding:11px 12px;font-size:15px;border:1.5px solid var(--line);border-radius:10px;background:#fff;width:100%}
   input:focus{outline:none;border-color:var(--brand)}
   button{font-size:14px;font-weight:600;border:0;border-radius:10px;padding:11px 16px;cursor:pointer;background:var(--brand);color:#fff}
-  button:active{background:var(--brand-d)}
+  button:active{transform:translateY(1px)}
   button.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
   button.sm{padding:6px 10px;font-size:13px}
   button.danger{background:#fff;color:var(--red);border:1.5px solid #f3c4c4}
@@ -36,17 +36,25 @@
   .pill{font-size:12.5px;font-weight:700;padding:5px 10px;border-radius:999px;background:#eef2f7;color:#334155}
   .pill.c{background:var(--green-bg);color:var(--green)}
   .pill.w{background:var(--amber-bg);color:var(--amber)}
-  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
-  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line)}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;min-width:640px}
+  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
   .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
   .tag.c{background:var(--green-bg);color:var(--green)}
   .tag.w{background:var(--amber-bg);color:var(--amber)}
-  .cap-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
-  .cap-edit > div{width:110px}
+  .tog{background:#fff;color:var(--muted);border:1.5px solid var(--line);padding:5px 10px;border-radius:999px;font-size:12.5px;cursor:pointer;font-weight:700}
+  .tog.on{background:var(--green-bg);color:var(--green);border-color:#bbf7d0}
+  .clk{background:#fff;color:var(--ink);border:1.5px solid var(--line);padding:5px 10px;border-radius:8px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .tm{font-weight:700;font-size:13px}
+  .clr{background:none;border:0;color:var(--red);padding:2px 5px;font-size:12px;cursor:pointer;font-weight:700}
+  .hrs{font-weight:800}
+  .sect{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 2px;font-weight:700}
   .empty{color:var(--muted);font-size:14px;padding:8px 0}
   .hint{color:var(--muted);font-size:12px;align-self:center}
   .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .cap-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .cap-edit > div{width:110px}
   .hide{display:none}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:10}
   .toast.show{opacity:1}
@@ -69,7 +77,7 @@
 
   <div id="dash" class="hide">
     <h1>Shift Manager</h1>
-    <div class="sub">Live log of who's booked. Set capacities, add shifts, manage the waiting list.</div>
+    <div class="sub">Bookings, onboarding status, and clock in / out for hours.</div>
     <div class="bar">
       <button id="refreshBtn" class="ghost sm">↻ Refresh</button>
       <button id="csvBtn" class="ghost sm">⬇ Export log (CSV)</button>
@@ -110,6 +118,13 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 
+function fmtTime(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+function hoursOf(inIso,outIso){
+  if(inIso && outIso){ const h=(new Date(outIso)-new Date(inIso))/3600000; return (h>0?h:0).toFixed(2)+'h'; }
+  if(inIso && !outIso) return 'in…';
+  return '—';
+}
+
 async function login(){
   const k = $('key').value.trim();
   const { data, error } = await sb.rpc('fb_admin_check',{ p_key:k });
@@ -125,19 +140,47 @@ async function loadLog(){
   renderShifts(LAST);
 }
 
+function confirmedRow(b){
+  const onb = b.onboarded
+    ? `<button class="tog on" data-onb="${b.id}" data-val="0">✓ Onboarded</button>`
+    : `<button class="tog" data-onb="${b.id}" data-val="1">Mark done</button>`;
+  const inCell = b.clock_in
+    ? `<span class="tm">${fmtTime(b.clock_in)}</span> <button class="clr" title="clear" data-clk="clear_in" data-cid="${b.id}">✕</button>`
+    : `<button class="clk" data-clk="in" data-cid="${b.id}">Clock in</button>`;
+  const outCell = b.clock_out
+    ? `<span class="tm">${fmtTime(b.clock_out)}</span> <button class="clr" title="clear" data-clk="clear_out" data-cid="${b.id}">✕</button>`
+    : `<button class="clk" data-clk="out" data-cid="${b.id}">Clock out</button>`;
+  return `<tr>
+    <td>${b.position}</td>
+    <td>${esc(b.name)}</td>
+    <td>${esc(b.phone)}</td>
+    <td>${onb}</td>
+    <td>${inCell}</td>
+    <td>${outCell}</td>
+    <td class="hrs">${hoursOf(b.clock_in,b.clock_out)}</td>
+    <td style="text-align:right"><button class="danger sm" data-del="${b.id}">Remove</button></td>
+  </tr>`;
+}
+function waitRow(b){
+  return `<tr>
+    <td>${b.position}</td>
+    <td>${esc(b.name)}</td>
+    <td>${esc(b.phone)}</td>
+    <td style="text-align:right"><button class="danger sm" data-del="${b.id}">Remove</button></td>
+  </tr>`;
+}
+
 function renderShifts(shifts){
   if(!shifts.length){ $('shifts').innerHTML='<div class="card empty">No shifts yet. Use “Add shift”.</div>'; return; }
   $('shifts').innerHTML = shifts.map(s=>{
     const conf = s.bookings.filter(b=>b.status==='confirmed');
     const wait = s.bookings.filter(b=>b.status==='waitlist');
-    const rows = b => `<tr>
-        <td>${b.position}</td><td>${esc(b.name)}</td><td>${esc(b.phone)}</td>
-        <td><span class="tag ${b.status==='confirmed'?'c':'w'}">${b.status}</span></td>
-        <td style="text-align:right"><button class="danger sm" data-del="${b.id}">Remove</button></td>
-      </tr>`;
-    const tableFor = (arr,title) => arr.length
-      ? `<table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>${title}</th><th></th></tr></thead><tbody>${arr.map(rows).join('')}</tbody></table>`
-      : `<div class="empty">No ${title.toLowerCase()} yet.</div>`;
+    const confTable = conf.length
+      ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
+      : `<div class="empty">No one booked yet.</div>`;
+    const waitTable = wait.length
+      ? `<div class="sect">Waiting list</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${wait.map(waitRow).join('')}</tbody></table></div>`
+      : '';
     return `<div class="card" data-id="${s.id}">
       <div class="shift-h">
         <div><div class="label">${esc(s.label)}</div><div class="time">${esc(s.start_time)} – ${esc(s.end_time)}</div></div>
@@ -147,8 +190,8 @@ function renderShifts(shifts){
         <span class="pill c">Confirmed ${s.confirmed_count} / ${s.capacity}</span>
         <span class="pill w">Waitlist ${s.waitlist_count} / ${s.waitlist_cap}</span>
       </div>
-      ${tableFor(conf,'Confirmed')}
-      ${wait.length?'<div style="height:6px"></div>'+tableFor(wait,'Waitlist'):''}
+      ${confTable}
+      ${waitTable}
       <div class="cap-edit">
         <div><label>Capacity</label><input type="number" min="0" value="${s.capacity}" data-cap="${s.id}" /></div>
         <div><label>Waitlist</label><input type="number" min="0" value="${s.waitlist_cap}" data-wait="${s.id}" /></div>
@@ -162,8 +205,18 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-delshift]').forEach(b=>b.onclick=()=>delShift(b.dataset.delshift));
   document.querySelectorAll('[data-savecap]').forEach(b=>b.onclick=()=>saveCap(b.dataset.savecap));
   document.querySelectorAll('[data-cap],[data-wait]').forEach(function(i){ i.onchange=function(){ saveCap(i.dataset.cap||i.dataset.wait); }; i.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); i.blur(); } }; });
+  document.querySelectorAll('[data-onb]').forEach(b=>b.onclick=()=>setOnboarded(b.dataset.onb, b.dataset.val==='1'));
+  document.querySelectorAll('[data-clk]').forEach(b=>b.onclick=()=>clock(b.dataset.cid, b.dataset.clk));
 }
 
+async function setOnboarded(id,val){
+  const { data } = await sb.rpc('fb_admin_set_onboarded',{ p_key:KEY, p_booking_id:id, p_value:val });
+  if(data && data.ok){ loadLog(); } else toast('Could not update.');
+}
+async function clock(id,action){
+  const { data } = await sb.rpc('fb_admin_clock',{ p_key:KEY, p_booking_id:id, p_action:action });
+  if(data && data.ok){ loadLog(); } else toast('Could not update.');
+}
 async function saveCap(id){
   const cap = parseInt(document.querySelector(`[data-cap="${id}"]`).value,10);
   const wait = parseInt(document.querySelector(`[data-wait="${id}"]`).value,10);
@@ -199,9 +252,14 @@ async function changeKey(){
   else toast((data&&data.message)||'Could not change passcode.');
 }
 function exportCsv(){
-  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Booked at']];
+  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Onboarded','Clock in','Clock out','Hours','Booked at']];
   LAST.forEach(s=>s.bookings.slice().sort((a,b)=>(b.status>a.status?1:-1)||a.position-b.position).forEach(b=>{
-    lines.push([s.label,s.shift_date,s.start_time+'-'+s.end_time,b.status,b.position,b.name,b.phone,new Date(b.created_at).toLocaleString()]);
+    lines.push([s.label,s.shift_date,s.start_time+'-'+s.end_time,b.status,b.position,b.name,b.phone,
+      b.onboarded?'Yes':'No',
+      b.clock_in?new Date(b.clock_in).toLocaleString():'',
+      b.clock_out?new Date(b.clock_out).toLocaleString():'',
+      hoursOf(b.clock_in,b.clock_out).replace('h','').replace('in…',''),
+      new Date(b.created_at).toLocaleString()]);
   }));
   const csv=lines.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');
