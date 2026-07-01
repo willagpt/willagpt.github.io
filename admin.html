@@ -144,6 +144,7 @@ async function loadLog(){
 }
 
 function confirmedRow(b){
+  const extra = b.forced_confirm ? ' <span class="tag w" title="Added over capacity">+ extra</span>' : '';
   const onb = b.onboarded
     ? `<button class="tog on" data-onb="${b.id}" data-val="0">✓ Onboarded</button>`
     : `<button class="tog" data-onb="${b.id}" data-val="1">Mark done</button>`;
@@ -153,15 +154,16 @@ function confirmedRow(b){
   const outCell = b.clock_out
     ? `<span class="tm">${fmtTime(b.clock_out)}</span> <button class="clr" title="clear" data-clk="clear_out" data-cid="${b.id}">✕</button>`
     : `<button class="clk" data-clk="out" data-cid="${b.id}">Clock out</button>`;
+  const backBtn = b.forced_confirm ? `<button class="clk" data-demote="${b.id}">↓ Waitlist</button> ` : '';
   return `<tr>
     <td>${b.position}</td>
-    <td>${esc(b.name)}</td>
+    <td>${esc(b.name)}${extra}</td>
     <td>${esc(b.phone)}</td>
     <td>${onb}</td>
     <td>${inCell}</td>
     <td>${outCell}</td>
     <td class="hrs">${hoursOf(b.clock_in,b.clock_out)}</td>
-    <td style="text-align:right"><button class="danger sm" data-del="${b.id}">Remove</button></td>
+    <td style="text-align:right">${backBtn}<button class="danger sm" data-del="${b.id}">Remove</button></td>
   </tr>`;
 }
 function waitRow(b){
@@ -169,7 +171,7 @@ function waitRow(b){
     <td>${b.position}</td>
     <td>${esc(b.name)}</td>
     <td>${esc(b.phone)}</td>
-    <td style="text-align:right"><button class="danger sm" data-del="${b.id}">Remove</button></td>
+    <td style="text-align:right"><button class="clk" data-promote="${b.id}">↑ Move to shift</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
   </tr>`;
 }
 
@@ -217,8 +219,15 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-onb]').forEach(b=>b.onclick=()=>setOnboarded(b.dataset.onb, b.dataset.val==='1'));
   document.querySelectorAll('[data-clk]').forEach(b=>b.onclick=()=>clock(b.dataset.cid, b.dataset.clk));
   document.querySelectorAll('[data-addp]').forEach(b=>b.onclick=()=>addPerson(b.dataset.addp));
+  document.querySelectorAll('[data-promote]').forEach(b=>b.onclick=()=>promote(b.dataset.promote, true));
+  document.querySelectorAll('[data-demote]').forEach(b=>b.onclick=()=>promote(b.dataset.demote, false));
 }
 
+async function promote(id, toConfirm){
+  const { data } = await sb.rpc('fb_admin_promote',{ p_key:KEY, p_booking_id:id, p_confirm:toConfirm });
+  if(data && data.ok){ toast(toConfirm?'Moved to shift.':'Sent to waiting list.'); loadLog(); }
+  else toast((data&&data.message)||'Could not update.');
+}
 async function addPerson(shiftId){
   const nameEl = document.querySelector(`[data-addname="${shiftId}"]`);
   const phoneEl = document.querySelector(`[data-addphone="${shiftId}"]`);
