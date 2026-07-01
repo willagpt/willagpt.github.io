@@ -233,13 +233,17 @@ function renderShifts(shifts){
     return `<div class="card" data-id="${s.id}">
       <div class="shift-h">
         <div><div class="label">${esc(s.label)}</div><div class="time">${esc(s.start_time)} – ${esc(s.end_time)}</div></div>
-        <button class="danger sm" data-delshift="${s.id}">Delete shift</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="ghost sm" data-toggleactive="${s.id}" data-active="${s.active?1:0}">${s.active?'🔒 Close signups':'🔓 Reopen signups'}</button>
+          <button class="danger sm" data-delshift="${s.id}">Delete shift</button>
+        </div>
       </div>
       <div class="counts">
         <span class="pill c">Confirmed ${s.confirmed_count} / ${s.capacity}</span>
         <span class="pill w">Waitlist ${s.waitlist_count} / ${s.waitlist_cap}</span>
         ${conf.length?`<span class="pill">${comingCt} confirmed coming</span>`:''}
         ${ns.length?`<span class="pill n">No-shows ${ns.length}</span>`:''}
+        ${!s.active?`<span class="pill n">🔒 Closed to signups</span>`:''}
       </div>
       ${confTable}
       ${conf.length?`<div style="margin-top:8px"><button class="ghost sm" data-remindshift="${s.id}">📣 Text confirmed to confirm shift</button></div>`:''}
@@ -273,6 +277,14 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-unshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.unshow, false));
   document.querySelectorAll('[data-notify]').forEach(b=>b.onclick=()=>notifyWaitlist(b.dataset.notify));
   document.querySelectorAll('[data-remindshift]').forEach(b=>b.onclick=()=>remindConfirmedShift(b.dataset.remindshift));
+  document.querySelectorAll('[data-toggleactive]').forEach(b=>b.onclick=()=>setActive(b.dataset.toggleactive, b.dataset.active!=='1'));
+}
+
+async function setActive(id, makeActive){
+  if(!makeActive && !confirm('Close this shift to new sign-ups? People already booked keep their spot and can still clock in / confirm — it just stops any new bookings.')) return;
+  const { data } = await sb.rpc('fb_admin_set_active',{ p_key:KEY, p_shift_id:id, p_active:makeActive });
+  if(data && data.ok){ toast(makeActive?'Reopened for sign-ups.':'Closed to sign-ups.'); loadLog(); }
+  else toast((data&&data.message)||'Could not update.');
 }
 
 function remindConfirmedShift(shiftId){
