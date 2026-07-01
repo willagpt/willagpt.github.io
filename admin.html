@@ -53,6 +53,9 @@
   .empty{color:var(--muted);font-size:14px;padding:8px 0}
   .hint{color:var(--muted);font-size:12px;align-self:center}
   .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .addp{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .addp input{width:auto;flex:1;min-width:130px;padding:9px 11px;font-size:14px}
+  .addp .lbl{font-size:12.5px;font-weight:700;color:var(--muted);width:100%}
   .cap-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
   .cap-edit > div{width:110px}
   .hide{display:none}
@@ -192,6 +195,12 @@ function renderShifts(shifts){
       </div>
       ${confTable}
       ${waitTable}
+      <div class="addp">
+        <div class="lbl">Add someone to this shift</div>
+        <input placeholder="Full name" data-addname="${s.id}" />
+        <input placeholder="Mobile number" data-addphone="${s.id}" />
+        <button class="sm" data-addp="${s.id}">＋ Add</button>
+      </div>
       <div class="cap-edit">
         <div><label>Capacity</label><input type="number" min="0" value="${s.capacity}" data-cap="${s.id}" /></div>
         <div><label>Waitlist</label><input type="number" min="0" value="${s.waitlist_cap}" data-wait="${s.id}" /></div>
@@ -207,8 +216,18 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-cap],[data-wait]').forEach(function(i){ i.onchange=function(){ saveCap(i.dataset.cap||i.dataset.wait); }; i.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); i.blur(); } }; });
   document.querySelectorAll('[data-onb]').forEach(b=>b.onclick=()=>setOnboarded(b.dataset.onb, b.dataset.val==='1'));
   document.querySelectorAll('[data-clk]').forEach(b=>b.onclick=()=>clock(b.dataset.cid, b.dataset.clk));
+  document.querySelectorAll('[data-addp]').forEach(b=>b.onclick=()=>addPerson(b.dataset.addp));
 }
 
+async function addPerson(shiftId){
+  const nameEl = document.querySelector(`[data-addname="${shiftId}"]`);
+  const phoneEl = document.querySelector(`[data-addphone="${shiftId}"]`);
+  const name = nameEl.value.trim(), phone = phoneEl.value.trim();
+  if(!name || phone.replace(/\D/g,'').length < 7){ toast('Enter a name and a valid mobile number.'); return; }
+  const { data } = await sb.rpc('fb_admin_add_booking',{ p_key:KEY, p_shift_id:shiftId, p_name:name, p_phone:phone });
+  if(data && data.ok){ toast('Added.'); nameEl.value=''; phoneEl.value=''; loadLog(); }
+  else toast((data&&data.message)||'Could not add.');
+}
 async function setOnboarded(id,val){
   const { data } = await sb.rpc('fb_admin_set_onboarded',{ p_key:KEY, p_booking_id:id, p_value:val });
   if(data && data.ok){ loadLog(); } else toast('Could not update.');
