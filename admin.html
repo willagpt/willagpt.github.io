@@ -66,6 +66,7 @@
   .toast.show{opacity:1}
   .gate{max-width:360px;margin:60px auto}
   textarea{min-height:90px;resize:vertical}
+  .send{background:var(--brand);color:#fff}
 </style>
 </head>
 <body>
@@ -88,20 +89,23 @@
     <div class="bar">
       <button id="refreshBtn" class="ghost sm">↻ Refresh</button>
       <button id="csvBtn" class="ghost sm">⬇ Export log (CSV)</button>
-      <button id="remindBtn" class="ghost sm">📣 Reminder list</button>
+      <button id="remindBtn" class="ghost sm">📣 Reminder to confirmed</button>
       <button id="addToggle" class="ghost sm">＋ Add shift</button>
       <button id="keyBtn" class="ghost sm">🔑 Change passcode</button>
     </div>
 
     <div id="remindBox" class="card hide">
-      <div class="shift-h"><div class="label" style="font-size:16px">Shift-reminder text</div><button class="ghost sm" id="remindClose">Close</button></div>
-      <p style="font-size:13.5px;color:var(--muted);margin:8px 0">1) Copy the recipients and paste them into your SMS tool's bulk box. 2) Copy the message below. It links each person to the confirm page.</p>
-      <label>Recipients (confirmed people — Name, Number)</label>
-      <textarea id="remindRecips" readonly></textarea>
-      <button class="ghost sm" id="copyRecips" style="margin-top:8px">Copy recipients</button>
-      <label style="margin-top:14px">Message</label>
+      <div class="shift-h"><div class="label" style="font-size:16px" id="remindTitle">Send a text</div><button class="ghost sm" id="remindClose">Close</button></div>
+      <p style="font-size:13.5px;color:var(--muted);margin:8px 0" id="remindHelp"></p>
+      <label>Recipients — one per line as <em>Name, Number</em> (edit freely)</label>
+      <textarea id="remindRecips"></textarea>
+      <label style="margin-top:12px">Message <span style="font-weight:400">(use {{first_name}} to personalise)</span></label>
       <textarea id="remindMsg"></textarea>
-      <button class="ghost sm" id="copyMsg" style="margin-top:8px">Copy message</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+        <button class="send" id="sendNow">Send text now</button>
+        <button class="ghost sm" id="copyRecips">Copy recipients</button>
+        <button class="ghost sm" id="copyMsg">Copy message</button>
+      </div>
     </div>
 
     <div id="addForm" class="card hide">
@@ -129,14 +133,17 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const SUPABASE_URL = 'https://fhztszxpgqhunogwcoxw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3g-avL7NqQQsIMESfiGk4Q_8dBIarve';
+const SEND_URL = 'https://fhztszxpgqhunogwcoxw.supabase.co/functions/v1/send-sms';
 const CONFIRM_URL = 'https://willagpt.github.io/confirm.html';
+const BOOK_URL = 'https://willagpt.github.io';
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let KEY = sessionStorage.getItem('fb_key') || '';
 let LAST = [];
+let remindKind = 'reminder';
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 
 function fmtTime(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
 function hoursOf(inIso,outIso){
@@ -216,7 +223,8 @@ function renderShifts(shifts){
       ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Coming?</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
       : `<div class="empty">No one booked yet.</div>`;
     const waitTable = wait.length
-      ? `<div class="sect">Waiting list</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${wait.map(waitRow).join('')}</tbody></table></div>`
+      ? `<div class="sect">Waiting list</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${wait.map(waitRow).join('')}</tbody></table></div>
+         <div style="margin-top:8px"><button class="ghost sm" data-notify="${s.id}">📢 Text waiting list about open spots</button></div>`
       : '';
     const nsTable = ns.length
       ? `<div class="sect">No-shows</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${ns.map(noShowRow).join('')}</tbody></table></div>`
@@ -261,20 +269,66 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-demote]').forEach(b=>b.onclick=()=>promote(b.dataset.demote, false));
   document.querySelectorAll('[data-noshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.noshow, true));
   document.querySelectorAll('[data-unshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.unshow, false));
+  document.querySelectorAll('[data-notify]').forEach(b=>b.onclick=()=>notifyWaitlist(b.dataset.notify));
 }
 
+function openRemind(title, help, recips, message, kind){
+  remindKind = kind;
+  $('remindTitle').textContent = title;
+  $('remindHelp').textContent = help;
+  $('remindRecips').value = recips.join('\n');
+  $('remindMsg').value = message;
+  $('remindBox').classList.remove('hide');
+  $('remindBox').scrollIntoView({behavior:'smooth', block:'start'});
+  toast(recips.length+' recipients ready.');
+}
 function buildReminder(){
   const seen = new Set(); const recips = [];
   LAST.forEach(s=>s.bookings.filter(b=>b.status==='confirmed').forEach(b=>{
     const key=(b.phone||'').replace(/\D/g,'');
     if(key && !seen.has(key)){ seen.add(key); recips.push(`${b.name}, ${b.phone}`); }
   }));
-  $('remindRecips').value = recips.join('\n');
-  if(!$('remindMsg').value.trim()){
-    $('remindMsg').value = `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your shift: ${CONFIRM_URL} — tap the link and let us know. Thanks!`;
-  }
-  $('remindBox').classList.remove('hide');
-  toast(recips.length+' confirmed recipients ready.');
+  openRemind('Reminder to confirmed staff',
+    'Texts everyone confirmed, asking them to tap the link and confirm they are coming.',
+    recips,
+    `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your shift: ${CONFIRM_URL} — tap the link and let us know. Thanks!`,
+    'reminder');
+}
+function notifyWaitlist(shiftId){
+  const s = LAST.find(x=>x.id===shiftId); if(!s) return;
+  const recips = s.bookings.filter(b=>b.status==='waitlist').map(b=>`${b.name}, ${b.phone}`);
+  if(!recips.length){ toast('No one on the waiting list for this shift.'); return; }
+  openRemind('Notify waiting list — '+s.label,
+    'Texts this shift’s waiting list that a spot has opened, with the booking link.',
+    recips,
+    `Hi {{first_name}}, it's Chefly. A spot has opened on ${s.label}. Grab it here if you can make it: ${BOOK_URL} — first come, first served. Thanks!`,
+    'notify');
+}
+function parseRecips(text){
+  return text.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
+    const i=l.lastIndexOf(',');
+    if(i<0) return { phone:l, name:'', firstName:'' };
+    const name=l.slice(0,i).trim(), phone=l.slice(i+1).trim();
+    return { phone, name, firstName:name.split(/\s+/)[0]||'' };
+  }).filter(r=>r.phone.replace(/\D/g,'').length>=7);
+}
+async function sendNow(){
+  const recips = parseRecips($('remindRecips').value);
+  const message = $('remindMsg').value.trim();
+  if(!recips.length){ toast('No valid recipients.'); return; }
+  if(!message){ toast('Message is empty.'); return; }
+  if(!confirm('Send this text to '+recips.length+' people now?')) return;
+  toast('Sending…');
+  try{
+    const res = await fetch(SEND_URL,{ method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ key:KEY, recipients:recips, message, kind:remindKind }) });
+    const d = await res.json();
+    if(d && d.ok){
+      toast('Sent '+d.sent+' · failed '+d.failed+'.');
+      if(d.failed){ const f=(d.results||[]).filter(r=>r.status==='failed')[0]; if(f&&f.error) alert('Some failed. First error:\n'+f.error); }
+      loadLog();
+    } else { toast('Send failed.'); alert((d&&d.message)||'Send failed.'); }
+  }catch(e){ toast('Send failed.'); alert(String(e)); }
 }
 async function copyText(elId, label){
   try{ await navigator.clipboard.writeText($(elId).value); toast(label+' copied.'); }
@@ -366,6 +420,7 @@ $('refreshBtn').onclick=loadLog;
 $('csvBtn').onclick=exportCsv;
 $('remindBtn').onclick=buildReminder;
 $('remindClose').onclick=()=>$('remindBox').classList.add('hide');
+$('sendNow').onclick=sendNow;
 $('copyRecips').onclick=()=>copyText('remindRecips','Recipients');
 $('copyMsg').onclick=()=>copyText('remindMsg','Message');
 $('addToggle').onclick=()=>$('addForm').classList.toggle('hide');
