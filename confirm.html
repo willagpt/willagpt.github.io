@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chefly — Confirm your shift</title>
+<style>
+  :root{
+    --bg:#fff7ed; --card:#fff; --ink:#27160b; --muted:#8a6f5c;
+    --brand:#e8590c; --brand-d:#c2410c; --line:#f0d9c4;
+    --green:#15803d; --green-bg:#dcfce7; --red:#b91c1c; --red-bg:#fee2e2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+  .wrap{max-width:520px;margin:0 auto;padding:18px 16px 60px}
+  header{text-align:center;padding:14px 0 6px}
+  .logo{font-size:30px;font-weight:800;letter-spacing:-.5px;color:var(--brand-d)}
+  .sub{color:var(--muted);font-size:15px;margin-top:4px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:16px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  label{display:block;font-size:13px;color:var(--muted);margin:2px 0 6px;font-weight:600}
+  input{width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--line);border-radius:12px;background:#fffdfb;color:var(--ink);outline:none}
+  input:focus{border-color:var(--brand)}
+  button{border:0;border-radius:12px;cursor:pointer;font-weight:700}
+  .primary{width:100%;padding:14px;font-size:16px;background:var(--brand);color:#fff;margin-top:12px}
+  .primary:active{background:var(--brand-d)}
+  .shift{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .shift .label{font-size:17px;font-weight:800}
+  .shift .time{color:var(--muted);font-size:14px;margin-top:2px}
+  .btns{display:flex;gap:10px;margin-top:12px}
+  .btns button{flex:1;padding:13px;font-size:15px;border:1.5px solid var(--line);background:#fff;color:var(--ink)}
+  .btns .yes.on{background:var(--green-bg);color:var(--green);border-color:#bbf7d0}
+  .btns .no.on{background:var(--red-bg);color:var(--red);border-color:#f3c4c4}
+  .state{margin-top:10px;font-size:14px;font-weight:700}
+  .state.yes{color:var(--green)}
+  .state.no{color:var(--red)}
+  .msg{padding:14px;border-radius:12px;font-size:15px}
+  .msg.err{background:var(--red-bg);color:#7f1d1d}
+  .foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:20px}
+  .loading{text-align:center;color:var(--muted);padding:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Chefly</div>
+    <div class="sub">Please confirm if you're coming to your shift.</div>
+  </header>
+
+  <div id="step1" class="card">
+    <label for="phone">Enter your mobile number</label>
+    <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 07700 900000" />
+    <button class="primary" id="go">Find my shift</button>
+    <div id="err" style="color:var(--red);font-size:14px;margin-top:10px"></div>
+  </div>
+
+  <div id="result"></div>
+
+  <div class="foot">📍 Unit 17, 250 Milkwood Rd, London, SE24 0HG</div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const SUPABASE_URL = 'https://fhztszxpgqhunogwcoxw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3g-avL7NqQQsIMESfiGk4Q_8dBIarve';
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const phoneEl = document.getElementById('phone');
+const errEl = document.getElementById('err');
+const resultEl = document.getElementById('result');
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function lookup(){
+  errEl.textContent='';
+  const phone = phoneEl.value.trim();
+  if(phone.replace(/\D/g,'').length < 7){ errEl.textContent='Please enter a valid mobile number.'; return; }
+  resultEl.innerHTML='<div class="loading">Looking up your shift…</div>';
+  const { data, error } = await sb.rpc('fb_confirm_lookup',{ p_phone:phone });
+  if(error || !data || !data.ok){ resultEl.innerHTML=''; errEl.textContent='Something went wrong — please try again.'; return; }
+  render(data, phone);
+}
+
+function render(data, phone){
+  if(!data.found || !data.shifts || !data.shifts.length){
+    resultEl.innerHTML='<div class="card msg err">We couldn\'t find a confirmed shift for that number. If you think this is a mistake, please contact your manager.</div>';
+    return;
+  }
+  const cards = data.shifts.map(s=>`
+    <div class="shift" data-bid="${s.booking_id}">
+      <div class="label">${esc(s.label)}</div>
+      <div class="time">${esc(s.start_time)} – ${esc(s.end_time)}</div>
+      <div class="btns">
+        <button class="yes ${s.attending==='yes'?'on':''}" data-coming="1">✅ I'll be there</button>
+        <button class="no ${s.attending==='no'?'on':''}" data-coming="0">❌ Can't make it</button>
+      </div>
+      <div class="state ${s.attending==='yes'?'yes':(s.attending==='no'?'no':'')}">${s.attending==='yes'?'Confirmed — see you there!':(s.attending==='no'?'Thanks for letting us know.':'')}</div>
+    </div>`).join('');
+  resultEl.innerHTML = `<div class="card"><div style="font-weight:800;font-size:16px;margin-bottom:6px">Hi ${esc(data.name)} 👋</div>
+    <div style="color:var(--muted);font-size:14px;margin-bottom:6px">Tap to confirm each shift:</div>${cards}</div>`;
+  resultEl.querySelectorAll('.shift .btns button').forEach(b=>{
+    b.addEventListener('click',()=>setComing(b.closest('.shift').dataset.bid, b.dataset.coming==='1', phone, b.closest('.shift')));
+  });
+}
+
+async function setComing(bookingId, coming, phone, card){
+  const { data, error } = await sb.rpc('fb_confirm_set',{ p_phone:phone, p_booking_id:bookingId, p_coming:coming });
+  if(error || !data || !data.ok){ alert('Could not save — please try again.'); return; }
+  const yes = card.querySelector('.yes'), no = card.querySelector('.no'), state = card.querySelector('.state');
+  yes.classList.toggle('on', coming); no.classList.toggle('on', !coming);
+  state.className = 'state ' + (coming?'yes':'no');
+  state.textContent = coming ? 'Confirmed — see you there!' : 'Thanks for letting us know.';
+}
+
+document.getElementById('go').onclick=lookup;
+phoneEl.addEventListener('keydown',e=>{ if(e.key==='Enter') lookup(); });
+</script>
+</body>
+</html>

@@ -20,8 +20,8 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;
     box-shadow:0 1px 2px rgba(0,0,0,.04)}
   label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px;font-weight:600}
-  input{padding:11px 12px;font-size:15px;border:1.5px solid var(--line);border-radius:10px;background:#fff;width:100%}
-  input:focus{outline:none;border-color:var(--brand)}
+  input,textarea{padding:11px 12px;font-size:15px;border:1.5px solid var(--line);border-radius:10px;background:#fff;width:100%;font-family:inherit}
+  input:focus,textarea:focus{outline:none;border-color:var(--brand)}
   button{font-size:14px;font-weight:600;border:0;border-radius:10px;padding:11px 16px;cursor:pointer;background:var(--brand);color:#fff}
   button:active{transform:translateY(1px)}
   button.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
@@ -38,12 +38,14 @@
   .pill.w{background:var(--amber-bg);color:var(--amber)}
   .pill.n{background:var(--red-bg);color:var(--red)}
   .tbl-wrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;min-width:640px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;min-width:700px}
   th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
   .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
   .tag.c{background:var(--green-bg);color:var(--green)}
   .tag.w{background:var(--amber-bg);color:var(--amber)}
+  .tag.no{background:var(--red-bg);color:var(--red)}
+  .tag.na{background:#eef2f7;color:#64748b}
   .tog{background:#fff;color:var(--muted);border:1.5px solid var(--line);padding:5px 10px;border-radius:999px;font-size:12.5px;cursor:pointer;font-weight:700}
   .tog.on{background:var(--green-bg);color:var(--green);border-color:#bbf7d0}
   .clk{background:#fff;color:var(--ink);border:1.5px solid var(--line);padding:5px 10px;border-radius:8px;font-size:12.5px;cursor:pointer;font-weight:600}
@@ -63,6 +65,7 @@
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:10}
   .toast.show{opacity:1}
   .gate{max-width:360px;margin:60px auto}
+  textarea{min-height:90px;resize:vertical}
 </style>
 </head>
 <body>
@@ -81,12 +84,24 @@
 
   <div id="dash" class="hide">
     <h1>Shift Manager</h1>
-    <div class="sub">Bookings, onboarding status, and clock in / out for hours.</div>
+    <div class="sub">Bookings, onboarding, clock in/out, and shift-reminder confirmations.</div>
     <div class="bar">
       <button id="refreshBtn" class="ghost sm">↻ Refresh</button>
       <button id="csvBtn" class="ghost sm">⬇ Export log (CSV)</button>
+      <button id="remindBtn" class="ghost sm">📣 Reminder list</button>
       <button id="addToggle" class="ghost sm">＋ Add shift</button>
       <button id="keyBtn" class="ghost sm">🔑 Change passcode</button>
+    </div>
+
+    <div id="remindBox" class="card hide">
+      <div class="shift-h"><div class="label" style="font-size:16px">Shift-reminder text</div><button class="ghost sm" id="remindClose">Close</button></div>
+      <p style="font-size:13.5px;color:var(--muted);margin:8px 0">1) Copy the recipients and paste them into your SMS tool's bulk box. 2) Copy the message below. It links each person to the confirm page.</p>
+      <label>Recipients (confirmed people — Name, Number)</label>
+      <textarea id="remindRecips" readonly></textarea>
+      <button class="ghost sm" id="copyRecips" style="margin-top:8px">Copy recipients</button>
+      <label style="margin-top:14px">Message</label>
+      <textarea id="remindMsg"></textarea>
+      <button class="ghost sm" id="copyMsg" style="margin-top:8px">Copy message</button>
     </div>
 
     <div id="addForm" class="card hide">
@@ -114,6 +129,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const SUPABASE_URL = 'https://fhztszxpgqhunogwcoxw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3g-avL7NqQQsIMESfiGk4Q_8dBIarve';
+const CONFIRM_URL = 'https://willagpt.github.io/confirm.html';
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let KEY = sessionStorage.getItem('fb_key') || '';
@@ -127,6 +143,11 @@ function hoursOf(inIso,outIso){
   if(inIso && outIso){ const h=(new Date(outIso)-new Date(inIso))/3600000; return (h>0?h:0).toFixed(2)+'h'; }
   if(inIso && !outIso) return 'in…';
   return '—';
+}
+function attTag(a){
+  if(a==='yes') return ' <span class="tag c">coming</span>';
+  if(a==='no')  return ' <span class="tag no">can\'t make it</span>';
+  return ' <span class="tag na">no reply</span>';
 }
 
 async function login(){
@@ -160,6 +181,7 @@ function confirmedRow(b){
     <td>${b.position}</td>
     <td>${esc(b.name)}${extra}</td>
     <td>${esc(b.phone)}</td>
+    <td>${attTag(b.attending)}</td>
     <td>${onb}</td>
     <td>${inCell}</td>
     <td>${outCell}</td>
@@ -189,8 +211,9 @@ function renderShifts(shifts){
     const conf = s.bookings.filter(b=>b.status==='confirmed');
     const wait = s.bookings.filter(b=>b.status==='waitlist');
     const ns   = s.bookings.filter(b=>b.status==='no_show');
+    const comingCt = conf.filter(b=>b.attending==='yes').length;
     const confTable = conf.length
-      ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
+      ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Coming?</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
       : `<div class="empty">No one booked yet.</div>`;
     const waitTable = wait.length
       ? `<div class="sect">Waiting list</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${wait.map(waitRow).join('')}</tbody></table></div>`
@@ -206,6 +229,7 @@ function renderShifts(shifts){
       <div class="counts">
         <span class="pill c">Confirmed ${s.confirmed_count} / ${s.capacity}</span>
         <span class="pill w">Waitlist ${s.waitlist_count} / ${s.waitlist_cap}</span>
+        ${conf.length?`<span class="pill">${comingCt} confirmed coming</span>`:''}
         ${ns.length?`<span class="pill n">No-shows ${ns.length}</span>`:''}
       </div>
       ${confTable}
@@ -237,6 +261,24 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-demote]').forEach(b=>b.onclick=()=>promote(b.dataset.demote, false));
   document.querySelectorAll('[data-noshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.noshow, true));
   document.querySelectorAll('[data-unshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.unshow, false));
+}
+
+function buildReminder(){
+  const seen = new Set(); const recips = [];
+  LAST.forEach(s=>s.bookings.filter(b=>b.status==='confirmed').forEach(b=>{
+    const key=(b.phone||'').replace(/\D/g,'');
+    if(key && !seen.has(key)){ seen.add(key); recips.push(`${b.name}, ${b.phone}`); }
+  }));
+  $('remindRecips').value = recips.join('\n');
+  if(!$('remindMsg').value.trim()){
+    $('remindMsg').value = `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your shift: ${CONFIRM_URL} — tap the link and let us know. Thanks!`;
+  }
+  $('remindBox').classList.remove('hide');
+  toast(recips.length+' confirmed recipients ready.');
+}
+async function copyText(elId, label){
+  try{ await navigator.clipboard.writeText($(elId).value); toast(label+' copied.'); }
+  catch(e){ $(elId).select(); document.execCommand('copy'); toast(label+' copied.'); }
 }
 
 async function noShow(id, val){
@@ -302,9 +344,10 @@ async function changeKey(){
   else toast((data&&data.message)||'Could not change passcode.');
 }
 function exportCsv(){
-  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Onboarded','Clock in','Clock out','Hours','Booked at']];
+  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Coming','Onboarded','Clock in','Clock out','Hours','Booked at']];
   LAST.forEach(s=>s.bookings.slice().sort((a,b)=>(b.status>a.status?1:-1)||a.position-b.position).forEach(b=>{
     lines.push([s.label,s.shift_date,s.start_time+'-'+s.end_time,b.status,b.position,b.name,b.phone,
+      b.attending==='yes'?'Yes':(b.attending==='no'?'No':''),
       b.onboarded?'Yes':'No',
       b.clock_in?new Date(b.clock_in).toLocaleString():'',
       b.clock_out?new Date(b.clock_out).toLocaleString():'',
@@ -321,6 +364,10 @@ $('loginBtn').onclick=login;
 $('key').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
 $('refreshBtn').onclick=loadLog;
 $('csvBtn').onclick=exportCsv;
+$('remindBtn').onclick=buildReminder;
+$('remindClose').onclick=()=>$('remindBox').classList.add('hide');
+$('copyRecips').onclick=()=>copyText('remindRecips','Recipients');
+$('copyMsg').onclick=()=>copyText('remindMsg','Message');
 $('addToggle').onclick=()=>$('addForm').classList.toggle('hide');
 $('addBtn').onclick=addShift;
 $('keyBtn').onclick=changeKey;
