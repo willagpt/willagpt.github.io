@@ -36,6 +36,7 @@
   .pill{font-size:12.5px;font-weight:700;padding:5px 10px;border-radius:999px;background:#eef2f7;color:#334155}
   .pill.c{background:var(--green-bg);color:var(--green)}
   .pill.w{background:var(--amber-bg);color:var(--amber)}
+  .pill.n{background:var(--red-bg);color:var(--red)}
   .tbl-wrap{overflow-x:auto}
   table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;min-width:640px}
   th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -163,7 +164,7 @@ function confirmedRow(b){
     <td>${inCell}</td>
     <td>${outCell}</td>
     <td class="hrs">${hoursOf(b.clock_in,b.clock_out)}</td>
-    <td style="text-align:right">${backBtn}<button class="danger sm" data-del="${b.id}">Remove</button></td>
+    <td style="text-align:right">${backBtn}<button class="clk" data-noshow="${b.id}">No show</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
   </tr>`;
 }
 function waitRow(b){
@@ -174,17 +175,28 @@ function waitRow(b){
     <td style="text-align:right"><button class="clk" data-promote="${b.id}">↑ Move to shift</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
   </tr>`;
 }
+function noShowRow(b){
+  return `<tr>
+    <td>${esc(b.name)}</td>
+    <td>${esc(b.phone)}</td>
+    <td style="text-align:right"><button class="clk" data-unshow="${b.id}">↩ Undo</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
+  </tr>`;
+}
 
 function renderShifts(shifts){
   if(!shifts.length){ $('shifts').innerHTML='<div class="card empty">No shifts yet. Use “Add shift”.</div>'; return; }
   $('shifts').innerHTML = shifts.map(s=>{
     const conf = s.bookings.filter(b=>b.status==='confirmed');
     const wait = s.bookings.filter(b=>b.status==='waitlist');
+    const ns   = s.bookings.filter(b=>b.status==='no_show');
     const confTable = conf.length
       ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
       : `<div class="empty">No one booked yet.</div>`;
     const waitTable = wait.length
       ? `<div class="sect">Waiting list</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${wait.map(waitRow).join('')}</tbody></table></div>`
+      : '';
+    const nsTable = ns.length
+      ? `<div class="sect">No-shows</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${ns.map(noShowRow).join('')}</tbody></table></div>`
       : '';
     return `<div class="card" data-id="${s.id}">
       <div class="shift-h">
@@ -194,9 +206,11 @@ function renderShifts(shifts){
       <div class="counts">
         <span class="pill c">Confirmed ${s.confirmed_count} / ${s.capacity}</span>
         <span class="pill w">Waitlist ${s.waitlist_count} / ${s.waitlist_cap}</span>
+        ${ns.length?`<span class="pill n">No-shows ${ns.length}</span>`:''}
       </div>
       ${confTable}
       ${waitTable}
+      ${nsTable}
       <div class="addp">
         <div class="lbl">Add someone to this shift</div>
         <input placeholder="Full name" data-addname="${s.id}" />
@@ -221,8 +235,16 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-addp]').forEach(b=>b.onclick=()=>addPerson(b.dataset.addp));
   document.querySelectorAll('[data-promote]').forEach(b=>b.onclick=()=>promote(b.dataset.promote, true));
   document.querySelectorAll('[data-demote]').forEach(b=>b.onclick=()=>promote(b.dataset.demote, false));
+  document.querySelectorAll('[data-noshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.noshow, true));
+  document.querySelectorAll('[data-unshow]').forEach(b=>b.onclick=()=>noShow(b.dataset.unshow, false));
 }
 
+async function noShow(id, val){
+  if(val && !confirm('Mark as no-show? Their spot is freed and the next person on the waiting list moves up.')) return;
+  const { data } = await sb.rpc('fb_admin_set_noshow',{ p_key:KEY, p_booking_id:id, p_value:val });
+  if(data && data.ok){ toast(val?'Marked no-show.':'Restored.'); loadLog(); }
+  else toast((data&&data.message)||'Could not update.');
+}
 async function promote(id, toConfirm){
   const { data } = await sb.rpc('fb_admin_promote',{ p_key:KEY, p_booking_id:id, p_confirm:toConfirm });
   if(data && data.ok){ toast(toConfirm?'Moved to shift.':'Sent to waiting list.'); loadLog(); }
