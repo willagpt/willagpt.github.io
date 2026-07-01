@@ -39,7 +39,7 @@
   .pill.w{background:var(--amber-bg);color:var(--amber)}
   .pill.n{background:var(--red-bg);color:var(--red)}
   .tbl-wrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;min-width:700px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;min-width:760px}
   th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
   .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
@@ -68,6 +68,9 @@
   .gate{max-width:360px;margin:60px auto}
   textarea{min-height:90px;resize:vertical}
   .send{background:var(--brand);color:#fff}
+  .stars{white-space:nowrap}
+  .star{cursor:pointer;color:#d1d5db;font-size:17px;line-height:1}
+  .star.on{color:#f59e0b}
 </style>
 </head>
 <body>
@@ -90,6 +93,7 @@
     <div class="bar">
       <button id="refreshBtn" class="ghost sm">↻ Refresh</button>
       <button id="csvBtn" class="ghost sm">⬇ Export log (CSV)</button>
+      <button id="printBtn" class="ghost sm">🖨 Print / PDF</button>
       <button id="remindBtn" class="ghost sm">📣 Reminder to confirmed</button>
       <button id="addToggle" class="ghost sm">＋ Add shift</button>
       <button id="keyBtn" class="ghost sm">🔑 Change passcode</button>
@@ -157,6 +161,12 @@ function attTag(a){
   if(a==='no')  return ' <span class="tag no">can\'t make it</span>';
   return ' <span class="tag na">no reply</span>';
 }
+function findShiftByBooking(bid){ return LAST.find(s=>s.bookings.some(b=>b.id===bid)); }
+function stars(b){
+  let o='<span class="stars">';
+  for(let n=1;n<=5;n++) o+=`<span class="star ${(b.rating||0)>=n?'on':''}" data-rate="${b.id}" data-n="${n}" title="${n} star">★</span>`;
+  return o+'</span>';
+}
 
 async function login(){
   const k = $('key').value.trim();
@@ -194,7 +204,8 @@ function confirmedRow(b){
     <td>${inCell}</td>
     <td>${outCell}</td>
     <td class="hrs">${hoursOf(b.clock_in,b.clock_out)}</td>
-    <td style="text-align:right">${backBtn}<button class="clk" data-noshow="${b.id}">No show</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
+    <td>${stars(b)}</td>
+    <td style="text-align:right;white-space:nowrap">${backBtn}<button class="clk" data-noshow="${b.id}">No show</button> <button class="danger sm" data-cancelperson="${b.id}">Cancel &amp; text</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
   </tr>`;
 }
 function waitRow(b){
@@ -202,7 +213,7 @@ function waitRow(b){
     <td>${b.position}</td>
     <td>${esc(b.name)}</td>
     <td>${esc(b.phone)}</td>
-    <td style="text-align:right"><button class="clk" data-promote="${b.id}">↑ Move to shift</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
+    <td style="text-align:right;white-space:nowrap"><button class="clk" data-promote="${b.id}">↑ Move to shift</button> <button class="danger sm" data-cancelperson="${b.id}">Cancel &amp; text</button> <button class="danger sm" data-del="${b.id}">Remove</button></td>
   </tr>`;
 }
 function noShowRow(b){
@@ -221,7 +232,7 @@ function renderShifts(shifts){
     const ns   = s.bookings.filter(b=>b.status==='no_show');
     const comingCt = conf.filter(b=>b.attending==='yes').length;
     const confTable = conf.length
-      ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Coming?</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
+      ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Coming?</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th>Rating</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
       : `<div class="empty">No one booked yet.</div>`;
     const waitTable = wait.length
       ? `<div class="sect">Waiting list</div><div class="tbl-wrap"><table style="min-width:auto"><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>${wait.map(waitRow).join('')}</tbody></table></div>
@@ -235,6 +246,7 @@ function renderShifts(shifts){
         <div><div class="label">${esc(s.label)}</div><div class="time">${esc(s.start_time)} – ${esc(s.end_time)}</div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="ghost sm" data-toggleactive="${s.id}" data-active="${s.active?1:0}">${s.active?'🔒 Close signups':'🔓 Reopen signups'}</button>
+          <button class="danger sm" data-cancelshift="${s.id}">❌ Cancel shift</button>
           <button class="danger sm" data-delshift="${s.id}">Delete shift</button>
         </div>
       </div>
@@ -278,24 +290,73 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-notify]').forEach(b=>b.onclick=()=>notifyWaitlist(b.dataset.notify));
   document.querySelectorAll('[data-remindshift]').forEach(b=>b.onclick=()=>remindConfirmedShift(b.dataset.remindshift));
   document.querySelectorAll('[data-toggleactive]').forEach(b=>b.onclick=()=>setActive(b.dataset.toggleactive, b.dataset.active!=='1'));
+  document.querySelectorAll('[data-cancelshift]').forEach(b=>b.onclick=()=>cancelShift(b.dataset.cancelshift));
+  document.querySelectorAll('[data-cancelperson]').forEach(b=>b.onclick=()=>cancelPerson(b.dataset.cancelperson));
+  document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>setRating(b.dataset.rate, parseInt(b.dataset.n,10)));
 }
 
-async function setActive(id, makeActive){
-  if(!makeActive && !confirm('Close this shift to new sign-ups? People already booked keep their spot and can still clock in / confirm — it just stops any new bookings.')) return;
-  const { data } = await sb.rpc('fb_admin_set_active',{ p_key:KEY, p_shift_id:id, p_active:makeActive });
-  if(data && data.ok){ toast(makeActive?'Reopened for sign-ups.':'Closed to sign-ups.'); loadLog(); }
-  else toast((data&&data.message)||'Could not update.');
+async function setRating(id, n){
+  const s = findShiftByBooking(id); const b = s && s.bookings.find(x=>x.id===id);
+  const val = (b && b.rating===n) ? 0 : n;
+  const { data } = await sb.rpc('fb_admin_set_rating',{ p_key:KEY, p_booking_id:id, p_rating:val });
+  if(data && data.ok){ loadLog(); } else toast('Could not save rating.');
 }
 
-function remindConfirmedShift(shiftId){
+async function cancelShift(shiftId){
   const s = LAST.find(x=>x.id===shiftId); if(!s) return;
-  const recips = s.bookings.filter(b=>b.status==='confirmed').map(b=>`${b.name}, ${b.phone}`);
-  if(!recips.length){ toast('No confirmed people on this shift.'); return; }
-  openRemind('Confirm shift — '+s.label,
-    'Texts this shift’s confirmed staff, asking them to tap the link and confirm they are coming.',
-    recips,
-    `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your ${s.label} shift (${s.start_time}–${s.end_time}): ${CONFIRM_URL} — tap the link and let us know. Thanks!`,
-    'reminder');
+  const recips = s.bookings.filter(b=>b.status!=='no_show').map(b=>`${b.name}, ${b.phone}`);
+  if(!confirm('Cancel the whole '+s.label+' shift? It will be closed to sign-ups, and you can text everyone booked ('+recips.length+') that it is off.')) return;
+  await sb.rpc('fb_admin_set_active',{ p_key:KEY, p_shift_id:shiftId, p_active:false });
+  await loadLog();
+  if(recips.length){
+    openRemind('Cancel shift — '+s.label,
+      'This shift is now closed. Text everyone booked that it is cancelled.',
+      recips,
+      `Hi {{first_name}}, it's Chefly. Unfortunately the ${s.label} shift (${s.start_time}–${s.end_time}) has been cancelled and is no longer going ahead. Sorry for any inconvenience and thank you.`,
+      'cancel');
+  } else { toast('Shift closed. No one was booked.'); }
+}
+async function cancelPerson(bid){
+  const s = findShiftByBooking(bid); if(!s) return;
+  const b = s.bookings.find(x=>x.id===bid); if(!b) return;
+  if(!confirm('Cancel '+b.name+' from '+s.label+'? They will be removed from the shift and you can text them.')) return;
+  openRemind('Cancel person — '+b.name,
+    'They have been removed. Send them a text letting them know they are no longer needed.',
+    [`${b.name}, ${b.phone}`],
+    `Hi {{first_name}}, it's Chefly. Sorry, we no longer need you for the ${s.label} shift (${s.start_time}–${s.end_time}) on ${s.shift_date}. Apologies for the late notice and thanks for your flexibility.`,
+    'cancel');
+  await sb.rpc('fb_admin_delete_booking',{ p_key:KEY, p_booking_id:bid });
+  loadLog();
+}
+
+function printRoster(){
+  if(!LAST.length){ toast('Nothing to print yet.'); return; }
+  let body = `<h1>Chefly — Shift roster</h1><div class="meta">Generated ${new Date().toLocaleString()}</div>`;
+  LAST.forEach(s=>{
+    const conf = s.bookings.filter(b=>b.status==='confirmed');
+    const wait = s.bookings.filter(b=>b.status==='waitlist');
+    const ns   = s.bookings.filter(b=>b.status==='no_show');
+    body += `<h2>${esc(s.label)} &nbsp;<span class="t">${esc(s.start_time)}–${esc(s.end_time)}</span>${s.active?'':' <span class="cl">(CLOSED)</span>'}</h2>`;
+    body += `<div class="meta">Confirmed ${conf.length}/${s.capacity} · Waiting ${wait.length}/${s.waitlist_cap}${ns.length?(' · No-shows '+ns.length):''}</div>`;
+    body += `<table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Coming?</th><th>Onboarded</th><th>Rating</th></tr></thead><tbody>`;
+    if(conf.length){ conf.forEach((b,i)=>{ body += `<tr><td>${i+1}</td><td>${esc(b.name)}</td><td>${esc(b.phone)}</td><td>${b.attending==='yes'?'Yes':(b.attending==='no'?'No':'-')}</td><td>${b.onboarded?'Yes':'No'}</td><td>${b.rating?('★'.repeat(b.rating)+'☆'.repeat(5-b.rating)):'☆☆☆☆☆'}</td></tr>`; }); }
+    else { body += `<tr><td colspan="6" style="color:#777">No one booked</td></tr>`; }
+    body += `</tbody></table>`;
+    if(wait.length){ body += `<div class="wl"><b>Waiting list:</b> ${wait.map(b=>esc(b.name)+' ('+esc(b.phone)+')').join(', ')}</div>`; }
+  });
+  const w = window.open('', '_blank');
+  if(!w){ toast('Allow pop-ups to print.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Chefly Shift Roster</title><style>
+    body{font-family:-apple-system,Arial,sans-serif;padding:26px;color:#111}
+    h1{font-size:20px;margin:0 0 2px} h2{font-size:16px;margin:22px 0 2px} h2 .t{font-weight:400;color:#666;font-size:13px} h2 .cl{color:#b91c1c;font-size:13px}
+    .meta{color:#666;font-size:12px;margin-bottom:6px}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+    th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+    th{background:#f3f4f6}
+    .wl{font-size:12.5px;margin-top:6px;color:#333}
+    @media print{ h2{page-break-after:avoid} table{page-break-inside:auto} tr{page-break-inside:avoid} }
+  </style></head><body>${body}</body></html>`);
+  w.document.close(); w.focus(); setTimeout(()=>{ try{ w.print(); }catch(e){} }, 400);
 }
 
 function openRemind(title, help, recips, message, kind){
@@ -318,6 +379,16 @@ function buildReminder(){
     'Texts everyone confirmed, asking them to tap the link and confirm they are coming.',
     recips,
     `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your shift: ${CONFIRM_URL} — tap the link and let us know. Thanks!`,
+    'reminder');
+}
+function remindConfirmedShift(shiftId){
+  const s = LAST.find(x=>x.id===shiftId); if(!s) return;
+  const recips = s.bookings.filter(b=>b.status==='confirmed').map(b=>`${b.name}, ${b.phone}`);
+  if(!recips.length){ toast('No confirmed people on this shift.'); return; }
+  openRemind('Confirm shift — '+s.label,
+    'Texts this shift’s confirmed staff, asking them to tap the link and confirm they are coming.',
+    recips,
+    `Hi {{first_name}}, it's Chefly. Please confirm you're coming to your ${s.label} shift (${s.start_time}–${s.end_time}): ${CONFIRM_URL} — tap the link and let us know. Thanks!`,
     'reminder');
 }
 function notifyWaitlist(shiftId){
@@ -424,11 +495,12 @@ async function changeKey(){
   else toast((data&&data.message)||'Could not change passcode.');
 }
 function exportCsv(){
-  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Coming','Onboarded','Clock in','Clock out','Hours','Booked at']];
+  const lines=[['Shift','Date','Time','Status','Position','Name','Mobile','Coming','Onboarded','Rating','Clock in','Clock out','Hours','Booked at']];
   LAST.forEach(s=>s.bookings.slice().sort((a,b)=>(b.status>a.status?1:-1)||a.position-b.position).forEach(b=>{
     lines.push([s.label,s.shift_date,s.start_time+'-'+s.end_time,b.status,b.position,b.name,b.phone,
       b.attending==='yes'?'Yes':(b.attending==='no'?'No':''),
       b.onboarded?'Yes':'No',
+      b.rating?(b.rating+'/5'):'',
       b.clock_in?new Date(b.clock_in).toLocaleString():'',
       b.clock_out?new Date(b.clock_out).toLocaleString():'',
       hoursOf(b.clock_in,b.clock_out).replace('h','').replace('in…',''),
@@ -444,6 +516,7 @@ $('loginBtn').onclick=login;
 $('key').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
 $('refreshBtn').onclick=loadLog;
 $('csvBtn').onclick=exportCsv;
+$('printBtn').onclick=printRoster;
 $('remindBtn').onclick=buildReminder;
 $('remindClose').onclick=()=>$('remindBox').classList.add('hide');
 $('sendNow').onclick=sendNow;
