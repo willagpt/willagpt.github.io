@@ -240,7 +240,7 @@ function renderShifts(shifts){
 }
 
 async function noShow(id, val){
-  if(val && !confirm('Mark as no-show? Their spot is freed and the next person on the waiting list moves up.')) return;
+  if(val && !confirm('Mark as no-show? Their spot opens up but nobody is added automatically — move someone from the waiting list once you have confirmed with them.')) return;
   const { data } = await sb.rpc('fb_admin_set_noshow',{ p_key:KEY, p_booking_id:id, p_value:val });
   if(data && data.ok){ toast(val?'Marked no-show.':'Restored.'); loadLog(); }
   else toast((data&&data.message)||'Could not update.');
@@ -271,10 +271,10 @@ async function saveCap(id){
   const cap = parseInt(document.querySelector(`[data-cap="${id}"]`).value,10);
   const wait = parseInt(document.querySelector(`[data-wait="${id}"]`).value,10);
   const { data } = await sb.rpc('fb_admin_set_capacity',{ p_key:KEY, p_shift_id:id, p_capacity:cap, p_waitlist:wait });
-  if(data && data.ok){ toast('Limits updated — waitlist auto-promoted if spots opened.'); loadLog(); } else toast('Could not save.');
+  if(data && data.ok){ toast('Limits updated.'); loadLog(); } else toast('Could not save.');
 }
 async function delBooking(id){
-  if(!confirm('Remove this person from the shift? The next person on the waiting list will be promoted automatically.')) return;
+  if(!confirm('Remove this person from the shift? Their spot opens up; move someone from the waiting list manually once confirmed.')) return;
   const { data } = await sb.rpc('fb_admin_delete_booking',{ p_key:KEY, p_booking_id:id });
   if(data && data.ok){ toast('Removed.'); loadLog(); } else toast('Could not remove.');
 }
