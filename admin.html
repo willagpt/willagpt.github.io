@@ -237,6 +237,8 @@ function renderShifts(shifts){
     const wait = s.bookings.filter(b=>b.status==='waitlist');
     const ns   = s.bookings.filter(b=>b.status==='no_show');
     const comingCt = conf.filter(b=>b.attending==='yes').length;
+    const inNow = conf.filter(b=>b.clock_in && !b.clock_out).length;
+    const doneCt = conf.filter(b=>b.clock_in && b.clock_out).length;
     const confTable = conf.length
       ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Mobile</th><th>Coming?</th><th>Onboarding</th><th>In</th><th>Out</th><th>Hours</th><th>Rating</th><th></th></tr></thead><tbody>${conf.map(confirmedRow).join('')}</tbody></table></div>`
       : `<div class="empty">No one booked yet.</div>`;
@@ -260,6 +262,8 @@ function renderShifts(shifts){
         <span class="pill c">Confirmed ${s.confirmed_count} / ${s.capacity}</span>
         <span class="pill w">Waitlist ${s.waitlist_count} / ${s.waitlist_cap}</span>
         ${conf.length?`<span class="pill">${comingCt} confirmed coming</span>`:''}
+        ${inNow?`<span class="pill c">🟢 ${inNow} clocked in now</span>`:''}
+        ${doneCt?`<span class="pill">${doneCt} clocked out</span>`:''}
         ${ns.length?`<span class="pill n">No-shows ${ns.length}</span>`:''}
         ${!s.active?`<span class="pill n">🔒 Closed to signups</span>`:''}
       </div>
