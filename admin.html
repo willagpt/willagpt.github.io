@@ -71,6 +71,7 @@
   .stars{white-space:nowrap}
   .star{cursor:pointer;color:#d1d5db;font-size:17px;line-height:1}
   .star.on{color:#f59e0b}
+  .pickp{padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:#fff;flex:1;min-width:170px}
 </style>
 </head>
 <body>
@@ -145,6 +146,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let KEY = sessionStorage.getItem('fb_key') || '';
 let LAST = [];
+let PEOPLE = [];
 let remindKind = 'reminder';
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -226,6 +228,10 @@ function noShowRow(b){
 
 function renderShifts(shifts){
   if(!shifts.length){ $('shifts').innerHTML='<div class="card empty">No shifts yet. Use “Add shift”.</div>'; return; }
+  const seenP=new Set(); PEOPLE=[];
+  shifts.forEach(s=>s.bookings.forEach(b=>{ const k=(b.phone||'').replace(/\D/g,''); if(k && !seenP.has(k)){ seenP.add(k); PEOPLE.push({name:b.name,phone:b.phone}); } }));
+  PEOPLE.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const peopleOpts = PEOPLE.map((p,i)=>`<option value="${i}">${esc(p.name)} (${esc(p.phone)})</option>`).join('');
   $('shifts').innerHTML = shifts.map(s=>{
     const conf = s.bookings.filter(b=>b.status==='confirmed');
     const wait = s.bookings.filter(b=>b.status==='waitlist');
@@ -263,6 +269,7 @@ function renderShifts(shifts){
       ${nsTable}
       <div class="addp">
         <div class="lbl">Add someone to this shift</div>
+        <select class="pickp" data-pick="${s.id}"><option value="">— or pick someone from a previous shift —</option>${peopleOpts}</select>
         <input placeholder="Full name" data-addname="${s.id}" />
         <input placeholder="Mobile number" data-addphone="${s.id}" />
         <button class="sm" data-addp="${s.id}">＋ Add</button>
@@ -293,6 +300,11 @@ function renderShifts(shifts){
   document.querySelectorAll('[data-cancelshift]').forEach(b=>b.onclick=()=>cancelShift(b.dataset.cancelshift));
   document.querySelectorAll('[data-cancelperson]').forEach(b=>b.onclick=()=>cancelPerson(b.dataset.cancelperson));
   document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>setRating(b.dataset.rate, parseInt(b.dataset.n,10)));
+  document.querySelectorAll('[data-pick]').forEach(sel=>sel.onchange=function(){
+    const p=PEOPLE[this.value]; if(!p) return;
+    document.querySelector(`[data-addname="${this.dataset.pick}"]`).value=p.name;
+    document.querySelector(`[data-addphone="${this.dataset.pick}"]`).value=p.phone;
+  });
 }
 
 async function setRating(id, n){
@@ -449,7 +461,7 @@ async function addPerson(shiftId){
   const name = nameEl.value.trim(), phone = phoneEl.value.trim();
   if(!name || phone.replace(/\D/g,'').length < 7){ toast('Enter a name and a valid mobile number.'); return; }
   const { data } = await sb.rpc('fb_admin_add_booking',{ p_key:KEY, p_shift_id:shiftId, p_name:name, p_phone:phone });
-  if(data && data.ok){ toast('Added.'); nameEl.value=''; phoneEl.value=''; loadLog(); }
+  if(data && data.ok){ toast('Added.'); nameEl.value=''; phoneEl.value=''; const sel=document.querySelector(`[data-pick="${shiftId}"]`); if(sel) sel.value=''; loadLog(); }
   else toast((data&&data.message)||'Could not add.');
 }
 async function setOnboarded(id,val){
