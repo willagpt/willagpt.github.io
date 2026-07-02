@@ -75,6 +75,7 @@
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
   .chip{cursor:pointer;border:1.5px solid var(--line);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;background:#fff;color:var(--ink)}
   .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .nm{color:var(--brand);cursor:pointer;text-decoration:underline;font-weight:700}
 </style>
 </head>
 <body>
@@ -93,7 +94,7 @@
 
   <div id="dash" class="hide">
     <h1>Shift Manager</h1>
-    <div class="sub">Bookings, onboarding, clock in/out, and shift-reminder confirmations.</div>
+    <div class="sub">Bookings, onboarding, clock in/out, and shift-reminder confirmations. Tap a name to add feedback / notes.</div>
     <div class="bar">
       <button id="refreshBtn" class="ghost sm">↻ Refresh</button>
       <button id="csvBtn" class="ghost sm">⬇ Export log (CSV)</button>
@@ -218,7 +219,7 @@ function confirmedRow(b){
   const backBtn = b.forced_confirm ? `<button class="clk" data-demote="${b.id}">↓ Waitlist</button> ` : '';
   return `<tr>
     <td>${b.position}</td>
-    <td>${esc(b.name)}${extra}</td>
+    <td><span class="nm" data-notes="${b.id}" title="Feedback & notes">${esc(b.name)}</span>${extra}</td>
     <td>${esc(b.phone)}</td>
     <td>${attTag(b.attending)}</td>
     <td>${onb}</td>
