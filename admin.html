@@ -76,6 +76,9 @@
   .chip{cursor:pointer;border:1.5px solid var(--line);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;background:#fff;color:var(--ink)}
   .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
   .nm{color:var(--brand);cursor:pointer;text-decoration:underline;font-weight:700}
+  .modal{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 14px;overflow:auto}
+  .modal.hide{display:none}
+  .modal-card{background:var(--card);border-radius:14px;padding:16px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
@@ -118,7 +121,7 @@
       </div>
     </div>
 
-    <div id="noteBox" class="card hide">
+    <div id="noteBox" class="modal hide"><div class="modal-card">
       <div class="shift-h"><div class="label" style="font-size:16px" id="noteTitle">Feedback & availability</div><button class="ghost sm" id="noteClose">Close</button></div>
       <label>Their feedback (from the staff member)</label>
       <textarea id="noteTheir" placeholder="What they said…"></textarea>
@@ -129,7 +132,7 @@
       <label style="margin-top:10px">Available shifts</label>
       <div id="noteShifts" class="chips"></div>
       <div style="margin-top:14px"><button class="send" id="noteSave">Save</button></div>
-    </div>
+    </div></div>
 
     <div id="addForm" class="card hide">
       <div class="shift-h"><div class="label" style="font-size:16px">New shift</div></div>
@@ -339,7 +342,7 @@ function openNotes(bid){
   $('noteTheir').value=b.their_comment||''; $('noteOur').value=b.our_note||'';
   noteDaysSel=new Set(b.avail_days||[]); noteShiftsSel=new Set(b.avail_shifts||[]);
   renderChips();
-  $('noteBox').classList.remove('hide'); $('noteBox').scrollIntoView({behavior:'smooth',block:'start'});
+  $('noteBox').classList.remove('hide');
 }
 function renderChips(){
   $('noteDays').innerHTML=DAYS.map(d=>`<span class="chip ${noteDaysSel.has(d)?'on':''}" data-day="${d}">${d}</span>`).join('');
@@ -584,6 +587,7 @@ $('remindBtn').onclick=buildReminder;
 $('remindClose').onclick=()=>$('remindBox').classList.add('hide');
 $('noteSave').onclick=saveNotes;
 $('noteClose').onclick=()=>$('noteBox').classList.add('hide');
+$('noteBox').onclick=e=>{ if(e.target===$('noteBox')) $('noteBox').classList.add('hide'); };
 $('sendNow').onclick=sendNow;
 $('copyRecips').onclick=()=>copyText('remindRecips','Recipients');
 $('copyMsg').onclick=()=>copyText('remindMsg','Message');
